@@ -94,8 +94,8 @@ draw_brush(GtkWidget *widget,
     /* Paint to the surface, where we store our state */
     cr = cairo_create(surface);
 
-    float offset = 0.5;
-    float width = 1;
+    float offset = 2;
+    float width = 4;
     cairo_rectangle(cr, x - offset, y - offset, width, width);
     cairo_fill(cr);
 

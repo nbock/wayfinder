@@ -3,6 +3,7 @@
 #include <thread>
 #include <math.h>
 #include <unistd.h>
+#include <algorithm>
 
 #include "robot.hh"
 #include "viz.hh"
@@ -11,13 +12,12 @@ using std::cout;
 using std::endl;
 
 float res = 0.25;
-float x_offset = 26 / 0.25;
-float y_offset = 26 / 0.25;
-float x_res = 52 / 0.25;
-float y_res = 52 / 0.25;
+float x_offset = 26 / res;
+float y_offset = 26 / res;
+float x_res = 52 / res;
+float y_res = 52 / res;
 
 int grid[208][208];
-
 
 // Assumptions :
 // 1) Line is drawn from left to right.
@@ -28,44 +28,43 @@ int grid[208][208];
 // function for line generation
 void bresenham(int x1, int y1, int x2, int y2, int tgt_x, int tgt_y)
 {
-   int m_new = 2 * (y2 - y1);
-   int slope_error_new = m_new - (x2 - x1);
-   for (int x = x1, y = y1; x <= x2; x++)
-   {
-      if (x == tgt_x && y == tgt_y && tgt_x != -1 && tgt_y != -1) {
-        grid[x][y] += 1;
-        cout << "(" << x << "," << y << ")" << endl;
-      } 
-      
-      //else {
-      //  grid[x][y] -= 1;
-     //}
+    int m_new = 2 * (y2 - y1);
+    int slope_error_new = m_new - (x2 - x1);
+    for (int x = x1, y = y1; x <= x2; x++)
+    {
+        if (x != tgt_x && y != tgt_y) {
+            grid[x][y] -= 1;
+        }
 
-      // Add slope to increment angle formed
-      slope_error_new += m_new;
+        // Add slope to increment angle formed
+        slope_error_new += m_new;
 
-      // Slope error reached limit, time to
-      // increment y and update slope error.
-      if (slope_error_new >= 0)
-      {
-         y++;
-         slope_error_new  -= 2 * (x2 - x1);
-      }
+        // Slope error reached limit, time to
+        // increment y and update slope error.
+        if (slope_error_new >= 0)
+        {
+            y++;
+            slope_error_new  -= 2 * (x2 - x1);
+        }
    }
 }
 
 void
 callback(Robot* robot)
 {
+    int count = 0;
+    std::vector<float> angles;
+
+    int x = robot->pos_x;
+    int y = robot->pos_y;
+
     //cout << "\n===" << endl;
     for (auto hit : robot->ranges) {
-        int x = robot->pos_x;
-        int y = robot->pos_y;
         if (hit.range <= 2) {
-
             //viz_hit(hit.range, hit.angle, x, y);
 
             // get hit info for the occupancy grid
+            angles.push_back(hit.angle);
 
             int angle = hit.angle + (M_PI / 2.0);
             float dx = 0.5 * hit.range * cos(angle);
@@ -76,27 +75,44 @@ callback(Robot* robot)
             abs_y = abs_y / res;
             float adj_x = abs(abs_x - x_offset);
             float adj_y = abs(abs_y - y_offset);
-            adj_x = ceil(adj_x);
-            adj_y = ceil(adj_y);
+            adj_x = clamp(0, adj_x, 207);
+            adj_y = clamp(0, adj_y, 207);
 
             float start_x = abs(x/res - x_offset);
             float start_y = abs(y/res - y_offset);
             start_x = ceil(start_x);
             start_y = ceil(start_y);
 
+            cout << "HIT: (" << (int)adj_x << ", " << (int)adj_y << ") " << hit.angle <<endl;
+            grid[(int)adj_x][(int)adj_y] += 1;
+
+            // update misses
             if (start_x > adj_x && start_y > adj_y) {
                 bresenham(adj_x, adj_y, start_x, start_y, adj_x, adj_y);    
             } else {
                 bresenham(start_x, start_y, adj_x, adj_y, adj_x, adj_y);
             }
 
-        } else {
-            // update all estimated points based on misses
-            float angles[7] = {2.35, 1.57, 0.725, 0, -0.785, -1.57, -2.356};
-            for (float hit_angle : angles) {
-                int angle = hit_angle + (M_PI / 2.0);
-                float dx = 0.5 * 2.1 * cos(angle);
-                float dy = 0.5 * 2.1 * sin(angle);
+        } 
+    }
+
+    int size = angles.size();
+    while (size < 7) {
+        cout << "Size: " << size << endl;
+        // update all estimated points based on misses
+        std::vector<float> angles_raw = {2.35619, 1.57079, 0.785397, 0, -0.785397, -1.57079, -2.35619};
+        for (float angle : angles_raw) {
+            bool found = false;
+            for (float angle_hit : angles) {
+               if (abs(angle_hit - angle) < 0.1) {
+                    found = true;
+               } 
+            }
+            if (!found) {
+                cout << "Updating a miss on " << angle << endl;
+                int angle = angle + (M_PI / 2.0);
+                float dx = 0.5 * 2 * cos(angle);
+                float dy = 0.5 * 2 * sin(angle);
                 int abs_x = round(x + dx);
                 int abs_y = round(y + dy);
                 abs_x = abs_x / res;
@@ -113,9 +129,10 @@ callback(Robot* robot)
                     bresenham(start_x, start_y, adj_x, adj_y, -1, -1);
                 }   
             }
+            size++;
         }
-        //cout << hit.range << "@" << hit.angle << endl;
     }
+
 
     if (robot->ranges.size() < 5) {
         return;
@@ -170,9 +187,9 @@ draw_thread()
     while (true) {
         std::this_thread::sleep_for (std::chrono::seconds(1));
         //cout << "Drawing grid" << endl;
-        for (int i = 0; i < x_res; i++) {
-            for (int j = 0; j < y_res; j++) {
-                if (grid[i][j] > 1) {
+        for (int i = 0; i < 208; i++) {
+            for (int j = 0; j < 208; j++) {
+                if (grid[i][j] >= 50) {
                     //cout << "Drawn: " << i << ", " << j << endl;
                     draw_index(j, i);
                 }
