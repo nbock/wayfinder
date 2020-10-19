@@ -279,7 +279,8 @@ viz_hit(float range, float angle, float x, float y)
     int adj_x = abs_x + 26 / 0.25;
     int adj_y = abs_y + 26 / 0.25;
   
-    draw_brush(drawing_area, adj_x * 10, adj_y * 10);
+    cout << "Viz hit" << endl;
+    //draw_brush(drawing_area, adj_x * 10, adj_y * 10);
 
     //draw_brush(drawing_area, (x + dx)*10, (y + dy)*10);
 }

@@ -16,8 +16,10 @@ float x_offset = 26 / res;
 float y_offset = 26 / res;
 float x_res = 52 / res;
 float y_res = 52 / res;
+float log_odd_occ = 0.05;
+float log_odd_free = 0.95;
 
-int grid[208][208];
+float grid[208][208];
 
 // Assumptions :
 // 1) Line is drawn from left to right.
@@ -28,12 +30,14 @@ int grid[208][208];
 // function for line generation
 void bresenham(int x1, int y1, int x2, int y2, int tgt_x, int tgt_y)
 {
-    int m_new = 2 * (y2 - y1);
-    int slope_error_new = m_new - (x2 - x1);
-    for (int x = x1, y = y1; x <= x2; x++)
+    int m_new = 2 * (x2 - x1);
+    int slope_error_new = m_new - (y2 - y1);
+    for (int x = x1, y = y1; y <= y2; y++)
     {
-        if (x != tgt_x && y != tgt_y) {
-            grid[x][y] -= 1;
+        if (x != tgt_x || y != tgt_y) {
+            x = clamp(0, x, 207);
+            y = clamp(0, y, 207);
+            grid[x][y] -= log_odd_free;
         }
 
         // Add slope to increment angle formed
@@ -43,8 +47,8 @@ void bresenham(int x1, int y1, int x2, int y2, int tgt_x, int tgt_y)
         // increment y and update slope error.
         if (slope_error_new >= 0)
         {
-            y++;
-            slope_error_new  -= 2 * (x2 - x1);
+            x++;
+            slope_error_new  -= 2 * (y2 - y1);
         }
    }
 }
@@ -82,9 +86,12 @@ callback(Robot* robot)
             float start_y = abs(y/res - y_offset);
             start_x = ceil(start_x);
             start_y = ceil(start_y);
+            start_x = clamp(0, start_x, 207);
+            start_y = clamp(0, start_y, 207);
 
-            cout << "HIT: (" << (int)adj_x << ", " << (int)adj_y << ") " << hit.angle <<endl;
-            grid[(int)adj_x][(int)adj_y] += 1;
+            //cout << "HIT: (" << (int)adj_x * res << ", " << (int)adj_y * res << ") " << hit.angle <<endl;
+            grid[(int)start_x][(int)start_y] -= log_odd_free;
+            grid[(int)adj_x][(int)adj_y] += log_odd_occ;
 
             // update misses
             if (start_x > adj_x && start_y > adj_y) {
@@ -98,7 +105,7 @@ callback(Robot* robot)
 
     int size = angles.size();
     while (size < 7) {
-        cout << "Size: " << size << endl;
+        //cout << "Size: " << size << endl;
         // update all estimated points based on misses
         std::vector<float> angles_raw = {2.35619, 1.57079, 0.785397, 0, -0.785397, -1.57079, -2.35619};
         for (float angle : angles_raw) {
@@ -109,7 +116,7 @@ callback(Robot* robot)
                } 
             }
             if (!found) {
-                cout << "Updating a miss on " << angle << endl;
+                //cout << "Updating a miss on " << angle << endl;
                 int angle = angle + (M_PI / 2.0);
                 float dx = 0.5 * 2 * cos(angle);
                 float dy = 0.5 * 2 * sin(angle);
@@ -129,18 +136,18 @@ callback(Robot* robot)
                     bresenham(start_x, start_y, adj_x, adj_y, -1, -1);
                 }   
             }
-            size++;
         }
+        size++;
     }
 
 
     if (robot->ranges.size() < 5) {
-        return;
+        //return;
     }
 
-    float lft = clamp(0.0, robot->ranges[2].range, 2.0);
-    float fwd = clamp(0.0, robot->ranges[3].range, 2.0);
-    float rgt = clamp(0.0, robot->ranges[4].range, 2.0);
+    //float lft = clamp(0.0, robot->ranges[2].range, 2.0);
+    //float fwd = clamp(0.0, robot->ranges[3].range, 2.0);
+    //float rgt = clamp(0.0, robot->ranges[4].range, 2.0);
 
     /*
     cout << "lft,fwd,rgt = "
@@ -149,29 +156,76 @@ callback(Robot* robot)
          << rgt << endl;
     */
 
-    float spd = fwd - 1.0;
-    float trn = clamp(-1.0, lft - rgt, 1.0);
-
+    //float spd = fwd - 1.0;
+    //float trn = clamp(-1.0, lft - rgt, 1.0);
+    /*
     if (fwd < 1.2) {
       spd = 0;
       trn = 1;
     }
+    */
 
     /*
     cout << "spd,trn = " << spd << "," << trn << endl;
     */
-    robot->set_vel(spd + trn, spd - trn);
 
-    /*
-    cout << "x,y,t = "
-         << robot->pos_x << ","
-         << robot->pos_y << ","
-         << robot->pos_t << endl;
-    */
+    //robot->set_vel(spd + trn, spd - trn);
+    robot->set_vel(5.0, 5.0);
+    
+    int scenario = 0;
+    for (auto hit : robot->ranges) {
+        if (hit.range < 1) {
+            if (abs(hit.angle) < 0.1) {
+                scenario = 1;
+                break;
+            }
+            if (abs(hit.angle - 0.78539) < 0.1) {
+                scenario = 2;
+                break;
+            }
+            if (abs(hit.angle + 0.78539) < 0.1) {
+                scenario = 3;
+                break;
+            }
+            if (abs(hit.angle - 1.57) < 0.1) {
+                scenario = 4;
+                break;
+            }
+            if (abs(hit.angle + 1.57) < 0.1) {
+                scenario = 5;
+                break;
+            }
+            if (abs(hit.angle - 2.35619) < 0.1) {
+                scenario = 6;
+                break;
+            }
+            if (abs(hit.angle + 2.35619) < 0.1) {
+                scenario = 7;
+                break;
+            }
+        }
+    }
 
-    /*
-    robot->set_vel(robot->pos_t, -robot->pos_t);
-    */
+    switch (scenario) {
+        case 0:
+            robot->set_vel(1.0, 2.0);
+            return;
+        case 1:
+            robot->set_vel(1.0, -1.0);
+            return;
+        case 2:
+            robot->set_vel(1.0, -1.0);
+            return;
+        case 3:
+            robot->set_vel(1.0, -1.0);
+            return;
+        case 4:
+        case 5:
+        case 6:
+        case 7:
+            robot->set_vel(0.5, 0.5);
+            return;
+    }
 }
 
 void
@@ -186,11 +240,12 @@ draw_thread()
     clear();
     while (true) {
         std::this_thread::sleep_for (std::chrono::seconds(1));
+        clear();
         //cout << "Drawing grid" << endl;
         for (int i = 0; i < 208; i++) {
             for (int j = 0; j < 208; j++) {
-                if (grid[i][j] >= 50) {
-                    //cout << "Drawn: " << i << ", " << j << endl;
+                if (grid[i][j] >= 1.5) {
+                    cout << "Drawn: " << i << ", " << j << " Odd: " << grid[i][j] << endl;
                     draw_index(j, i);
                 }
             }
