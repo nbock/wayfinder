@@ -119,11 +119,6 @@ Robot::update()
     this->pos_y = degrade(raw_y, err_y) + 0.2*err_y;
     this->pos_t = degrade(raw_t, err_t) + 0.05*err_t;
 
-    // TODO: this is debug stuff, delete it
-    this->pos_x = raw_x;
-    this->pos_y = raw_y;
-    this->pos_t = raw_t;
-
     this->on_update(this);
 }
 

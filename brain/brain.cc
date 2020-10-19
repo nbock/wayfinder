@@ -4,6 +4,7 @@
 #include <math.h>
 #include <unistd.h>
 #include <algorithm>
+#include <atomic>
 
 #include "robot.hh"
 #include "viz.hh"
@@ -18,6 +19,12 @@ float x_res = 52 / res;
 float y_res = 52 / res;
 float log_odd_occ = 0.05;
 float log_odd_free = 0.95;
+float count = 0.00;
+float observed_x = 0.00;
+float observed_y = 0.00;
+std::atomic<int> estimate_x {0};
+std::atomic<int> estimate_y {0};
+
 
 float grid[208][208];
 
@@ -56,11 +63,12 @@ void bresenham(int x1, int y1, int x2, int y2, int tgt_x, int tgt_y)
 void
 callback(Robot* robot)
 {
-    int count = 0;
     std::vector<float> angles;
 
-    int x = robot->pos_x;
-    int y = robot->pos_y;
+    int x = estimate_x;
+    int y = estimate_y;
+    cout << x << ", " << y << endl;
+    cout << " REAL: " << robot->pos_x << ", " << robot->pos_y << endl;
 
     //cout << "\n===" << endl;
     for (auto hit : robot->ranges) {
@@ -208,7 +216,7 @@ callback(Robot* robot)
 
     switch (scenario) {
         case 0:
-            robot->set_vel(1.0, 2.0);
+            robot->set_vel(0.5, 1.0);
             return;
         case 1:
             robot->set_vel(1.0, -1.0);
@@ -244,11 +252,30 @@ draw_thread()
         //cout << "Drawing grid" << endl;
         for (int i = 0; i < 208; i++) {
             for (int j = 0; j < 208; j++) {
-                if (grid[i][j] >= 1.5) {
-                    cout << "Drawn: " << i << ", " << j << " Odd: " << grid[i][j] << endl;
+                if (grid[i][j] >= 2) {
+                    //cout << "Drawn: " << i << ", " << j << " Odd: " << grid[i][j] << endl;
                     draw_index(j, i);
                 }
             }
+        }
+    }
+}
+
+void 
+pos_thread(Robot* robot)
+{
+    while (true) {
+        if (count < 1000) {
+            count++;
+            observed_x += robot->pos_x;
+            observed_y += robot->pos_y;
+        } else {
+            estimate_x = observed_x / count;
+            estimate_y = observed_y / count;
+            //cout << estimate_x << ", " << estimate_y << endl;
+            count = 0;
+            observed_x = 0;
+            observed_y = 0;
         }
     }
 }
@@ -260,6 +287,7 @@ main(int argc, char* argv[])
     Robot robot(argc, argv, callback);
     std::thread rthr(robot_thread, &robot);
     std::thread dthr(draw_thread);
+    std::thread pthr(pos_thread, &robot);
 
     return viz_run(argc, argv);
 }
