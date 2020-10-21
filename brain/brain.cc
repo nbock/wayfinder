@@ -44,6 +44,7 @@ void bresenham(int x1, int y1, int x2, int y2, int tgt_x, int tgt_y)
         if (x != tgt_x || y != tgt_y) {
             x = clamp(0, x, 207);
             y = clamp(0, y, 207);
+            //cout << "MISS @ " << x << ", " << y << endl;
             grid[x][y] -= log_odd_free;
         }
 
@@ -67,14 +68,9 @@ callback(Robot* robot)
 
     int x = estimate_x;
     int y = estimate_y;
-    cout << x << ", " << y << endl;
-    cout << " REAL: " << robot->pos_x << ", " << robot->pos_y << endl;
 
-    //cout << "\n===" << endl;
     for (auto hit : robot->ranges) {
         if (hit.range <= 2) {
-            //viz_hit(hit.range, hit.angle, x, y);
-
             // get hit info for the occupancy grid
             angles.push_back(hit.angle);
 
@@ -97,8 +93,7 @@ callback(Robot* robot)
             start_x = clamp(0, start_x, 207);
             start_y = clamp(0, start_y, 207);
 
-            //cout << "HIT: (" << (int)adj_x * res << ", " << (int)adj_y * res << ") " << hit.angle <<endl;
-            grid[(int)start_x][(int)start_y] -= log_odd_free;
+            //cout << "HIT: (" << (int)adj_x << ", " << (int)adj_y << ") " << endl;
             grid[(int)adj_x][(int)adj_y] += log_odd_occ;
 
             // update misses
@@ -148,92 +143,103 @@ callback(Robot* robot)
         size++;
     }
 
-
-    if (robot->ranges.size() < 5) {
-        //return;
-    }
-
-    //float lft = clamp(0.0, robot->ranges[2].range, 2.0);
-    //float fwd = clamp(0.0, robot->ranges[3].range, 2.0);
-    //float rgt = clamp(0.0, robot->ranges[4].range, 2.0);
-
-    /*
-    cout << "lft,fwd,rgt = "
-         << lft << ","
-         << fwd << ","
-         << rgt << endl;
-    */
-
-    //float spd = fwd - 1.0;
-    //float trn = clamp(-1.0, lft - rgt, 1.0);
-    /*
-    if (fwd < 1.2) {
-      spd = 0;
-      trn = 1;
-    }
-    */
-
-    /*
-    cout << "spd,trn = " << spd << "," << trn << endl;
-    */
-
-    //robot->set_vel(spd + trn, spd - trn);
     robot->set_vel(5.0, 5.0);
     
-    int scenario = 0;
+    int scenario[7] = {false, false, false, false, false, false, false};
+    int close[7] = {false, false, false, false, false, false, false};
     for (auto hit : robot->ranges) {
+
         if (hit.range < 1) {
-            if (abs(hit.angle) < 0.1) {
-                scenario = 1;
-                break;
+             if (abs(hit.angle) < 0.3) {
+                close[0] = true;
             }
             if (abs(hit.angle - 0.78539) < 0.1) {
-                scenario = 2;
-                break;
+                close[1] = true;
             }
             if (abs(hit.angle + 0.78539) < 0.1) {
-                scenario = 3;
-                break;
+                close[2] = true;
             }
             if (abs(hit.angle - 1.57) < 0.1) {
-                scenario = 4;
-                break;
+                close[3] = true;
             }
             if (abs(hit.angle + 1.57) < 0.1) {
-                scenario = 5;
-                break;
+                close[4] = true;
             }
             if (abs(hit.angle - 2.35619) < 0.1) {
-                scenario = 6;
-                break;
+                close[5] = true;
             }
             if (abs(hit.angle + 2.35619) < 0.1) {
-                scenario = 7;
-                break;
+                close[6] = true;
+            }
+       } else if (hit.range < 2) {
+            if (abs(hit.angle) < 0.3) {
+                scenario[0] = true;
+            }
+            if (abs(hit.angle - 0.78539) < 0.1) {
+                scenario[1] = true;
+            }
+            if (abs(hit.angle + 0.78539) < 0.1) {
+                scenario[2] = true;
+            }
+            if (abs(hit.angle - 1.57) < 0.1) {
+                scenario[3] = true;
+            }
+            if (abs(hit.angle + 1.57) < 0.1) {
+                scenario[4] = true;
+            }
+            if (abs(hit.angle - 2.35619) < 0.1) {
+                scenario[5] = true;
+            }
+            if (abs(hit.angle + 2.35619) < 0.1) {
+                scenario[6] = true;
             }
         }
     }
+    
 
-    switch (scenario) {
-        case 0:
-            robot->set_vel(0.5, 1.0);
-            return;
-        case 1:
-            robot->set_vel(1.0, -1.0);
-            return;
-        case 2:
-            robot->set_vel(1.0, -1.0);
-            return;
-        case 3:
-            robot->set_vel(1.0, -1.0);
-            return;
-        case 4:
-        case 5:
-        case 6:
-        case 7:
-            robot->set_vel(0.5, 0.5);
-            return;
+    if (close[0] && scenario[1]) {
+        robot->set_vel(2.0, -2.0);
+        cout << "Close on left" << endl;
+        return;
+    } else if (close[1] && close[3]) {
+        robot->set_vel(1.5, -1.5);
+        cout << "Close on left 2" << endl;
+        return;
     }
+
+    if (scenario[0]) {
+        robot->set_vel(2.0, -2.0);
+        cout << "Case 0" << endl;
+        return;
+    } else if (scenario[1] && abs(robot->pos_t - 0.785) < 0.2) {
+        robot->set_vel(1.5, -1.5);
+        cout << "Case 1" << endl;
+        return;
+    } else if (scenario[2] && (scenario[1] || scenario[3] || scenario[5])) {
+        robot->set_vel(-2.0, 2.0);
+        cout << "Case 2.1" << endl;
+        return;
+    } else if (scenario[2] && abs(robot->pos_t) - 0.785 < 0.2) {
+        robot->set_vel(2.0, -2.0);
+        cout << "Case 2.2" << endl;
+        return;
+    } else if (scenario[3] || scenario[4]) {
+        robot->set_vel(1.0, 1.0);
+        cout << "Case 3" << endl;
+        return;
+    } else if (scenario[5]) {
+        robot->set_vel(0, 1.0);
+        cout << "Case 5" << endl;
+        return;
+    } else if (scenario[6]) {
+        robot->set_vel(1.0, 0);
+        cout << "Case 6" << endl;
+        return;
+    } else {
+        robot->set_vel(1.0, 1.0);
+        return;
+    }
+
 }
 
 void
@@ -247,13 +253,13 @@ draw_thread()
 {
     clear();
     while (true) {
-        std::this_thread::sleep_for (std::chrono::seconds(1));
+        std::this_thread::sleep_for (std::chrono::seconds(3));
         clear();
         //cout << "Drawing grid" << endl;
         for (int i = 0; i < 208; i++) {
             for (int j = 0; j < 208; j++) {
-                if (grid[i][j] >= 2) {
-                    //cout << "Drawn: " << i << ", " << j << " Odd: " << grid[i][j] << endl;
+                if (grid[i][j] >= 1.7) {
+                    //cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
                     draw_index(j, i);
                 }
             }
@@ -265,14 +271,13 @@ void
 pos_thread(Robot* robot)
 {
     while (true) {
-        if (count < 1000) {
+        if (count < 2000) {
             count++;
             observed_x += robot->pos_x;
             observed_y += robot->pos_y;
         } else {
             estimate_x = observed_x / count;
             estimate_y = observed_y / count;
-            //cout << estimate_x << ", " << estimate_y << endl;
             count = 0;
             observed_x = 0;
             observed_y = 0;

@@ -218,12 +218,16 @@ activate (GtkApplication *app,
                           | GDK_POINTER_MOTION_MASK);
 
     gtk_widget_show_all(window);
+    gdk_threads_init();
 }
 
 void
 draw_index(int x, int y)
 {
+    GDK_THREADS_ENTER();
+    guard _gg(mx);
     draw_brush(drawing_area, x * 2, y * 2);
+    GDK_THREADS_LEAVE();
 }
 
 void
@@ -235,6 +239,7 @@ clear()
 void
 viz_hit(float range, float angle, float x, float y)
 {
+    GDK_THREADS_ENTER();
     guard _gg(mx);
 
     int ww, hh;
@@ -283,6 +288,7 @@ viz_hit(float range, float angle, float x, float y)
     //draw_brush(drawing_area, adj_x * 10, adj_y * 10);
 
     //draw_brush(drawing_area, (x + dx)*10, (y + dy)*10);
+    GDK_THREADS_LEAVE();
 }
 
 int
