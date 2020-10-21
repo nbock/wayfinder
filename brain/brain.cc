@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <thread>
 #include <math.h>
@@ -208,7 +207,7 @@ callback(Robot* robot)
     }
 
     if (scenario[0]) {
-        robot->set_vel(2.0, -2.0);
+        robot->set_vel(3.0, -2.0);
         cout << "Case 0" << endl;
         return;
     } else if (scenario[1] && abs(robot->pos_t - 0.785) < 0.2) {
@@ -258,7 +257,7 @@ draw_thread()
         //cout << "Drawing grid" << endl;
         for (int i = 0; i < 208; i++) {
             for (int j = 0; j < 208; j++) {
-                if (grid[i][j] >= 1.7) {
+                if (grid[i][j] >= 1.0) {
                     //cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
                     draw_index(j, i);
                 }

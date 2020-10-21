@@ -63,7 +63,7 @@ Robot::Robot(int argc, char* argv[], void (*cb)(Robot*))
     node = NodePtr(new Node());
     node->Init();
 
-    vel_pub = node->Advertise<msgs::Any>("~/tankbot0/vel_cmd");
+    vel_pub = node->Advertise<msgs::Any>("~/tankbot0/vel_cmd", 50);
     vel_pub->WaitForConnection();
 
     cout << "advertise on " << vel_pub->GetTopic() << endl;
