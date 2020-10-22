@@ -195,50 +195,29 @@ callback(Robot* robot)
         }
     }
     
-
-    if (close[0] && scenario[1]) {
-        robot->set_vel(2.0, -2.0);
-        cout << "Close on left" << endl;
-        return;
-    } else if (close[1] && close[3]) {
-        robot->set_vel(1.5, -1.5);
-        cout << "Close on left 2" << endl;
+    if (robot->ranges.size() < 5) {
         return;
     }
 
-    if (scenario[0]) {
-        robot->set_vel(3.0, -2.0);
-        cout << "Case 0" << endl;
-        return;
-    } else if (scenario[1] && abs(robot->pos_t - 0.785) < 0.2) {
-        robot->set_vel(1.5, -1.5);
-        cout << "Case 1" << endl;
-        return;
-    } else if (scenario[2] && (scenario[1] || scenario[3] || scenario[5])) {
-        robot->set_vel(-2.0, 2.0);
-        cout << "Case 2.1" << endl;
-        return;
-    } else if (scenario[2] && abs(robot->pos_t) - 0.785 < 0.2) {
-        robot->set_vel(2.0, -2.0);
-        cout << "Case 2.2" << endl;
-        return;
-    } else if (scenario[3] || scenario[4]) {
-        robot->set_vel(1.0, 1.0);
-        cout << "Case 3" << endl;
-        return;
-    } else if (scenario[5]) {
-        robot->set_vel(0, 1.0);
-        cout << "Case 5" << endl;
-        return;
-    } else if (scenario[6]) {
-        robot->set_vel(1.0, 0);
-        cout << "Case 6" << endl;
-        return;
-    } else {
-        robot->set_vel(1.0, 1.0);
-        return;
+    float lft = clamp(0.0, robot->ranges[2].range, 2.0);
+    float fwd = clamp(0.0, robot->ranges[3].range, 2.0);
+    float rgt = clamp(0.0, robot->ranges[4].range, 2.0);
+    cout << "lft,fwd,rgt = "
+         << lft << ","
+         << fwd << ","
+         << rgt << endl;
+
+    float spd = fwd - 1.0;
+    float trn = clamp(-1.0, lft - rgt, 1.0);
+
+    if (fwd < 1.2) {
+      spd = 0;
+      trn = 1;
     }
 
+    cout << "spd,trn = " << spd << "," << trn << endl;
+    robot->set_vel(spd + trn, spd - trn);
+    return;
 }
 
 void
@@ -248,26 +227,7 @@ robot_thread(Robot* robot)
 }
 
 void
-draw_thread() 
-{
-    clear();
-    while (true) {
-        std::this_thread::sleep_for (std::chrono::seconds(3));
-        clear();
-        //cout << "Drawing grid" << endl;
-        for (int i = 0; i < 208; i++) {
-            for (int j = 0; j < 208; j++) {
-                if (grid[i][j] >= 1.0) {
-                    //cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
-                    draw_index(j, i);
-                }
-            }
-        }
-    }
-}
-
-void 
-pos_thread(Robot* robot)
+draw_thread(Robot* robot) 
 {
     while (true) {
         if (count < 2000) {
@@ -280,9 +240,21 @@ pos_thread(Robot* robot)
             count = 0;
             observed_x = 0;
             observed_y = 0;
+            clear();
+        }
+ 
+        //cout << "Drawing grid" << endl;
+        for (int i = 0; i < 208; i++) {
+            for (int j = 0; j < 208; j++) {
+                if (grid[i][j] >= 1.5) {
+                    //cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
+                    draw_index(j, i);
+                }
+            }
         }
     }
 }
+
 
 int
 main(int argc, char* argv[])
@@ -290,8 +262,7 @@ main(int argc, char* argv[])
     cout << "making robot" << endl;
     Robot robot(argc, argv, callback);
     std::thread rthr(robot_thread, &robot);
-    std::thread dthr(draw_thread);
-    std::thread pthr(pos_thread, &robot);
+    std::thread dthr(draw_thread, &robot);
 
     return viz_run(argc, argv);
 }
