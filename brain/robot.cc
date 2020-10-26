@@ -49,13 +49,16 @@ nudge(int* ee)
 float
 degrade(float xx, int ee)
 {
+    /*
     float aa = 1.0f + 0.05 * float(ee);
     return aa * xx;
+    */
+    return 1.0*xx + 0.2*ee;
 }
 
 Robot::Robot(int argc, char* argv[], void (*cb)(Robot*))
     : on_update(cb), task_done(false), stamp(0.0f),
-      err_x(5), err_y(0), err_t(3), err_l(1), err_r(0)
+      err_x(5), err_y(0), err_l(1), err_r(0)
 {
     srand(getpid()^time(0));
 
@@ -115,9 +118,9 @@ Robot::update()
     nudge(&(this->err_l));
     nudge(&(this->err_r));
 
-    this->pos_x = degrade(raw_x, err_x) + 0.2*err_x;
-    this->pos_y = degrade(raw_y, err_y) + 0.2*err_y;
-    this->pos_t = degrade(raw_t, err_t) + 0.05*err_t;
+    this->pos_x = degrade(raw_x, err_x);
+    this->pos_y = degrade(raw_y, err_y);
+    this->pos_t = raw_t;
 
     this->on_update(this);
 }
