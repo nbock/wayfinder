@@ -49,11 +49,9 @@ nudge(int* ee)
 float
 degrade(float xx, int ee)
 {
-    /*
     float aa = 1.0f + 0.05 * float(ee);
     return aa * xx;
-    */
-    return 1.0*xx + 0.2*ee;
+    //return 1.0*xx + 0.2*ee;
 }
 
 Robot::Robot(int argc, char* argv[], void (*cb)(Robot*))
@@ -119,7 +117,9 @@ Robot::update()
     nudge(&(this->err_r));
 
     this->pos_x = degrade(raw_x, err_x);
+    this->pos_x = raw_x;
     this->pos_y = degrade(raw_y, err_y);
+    this->pos_y = raw_y;
     this->pos_t = raw_t;
 
     this->on_update(this);

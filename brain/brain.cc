@@ -18,15 +18,16 @@ float x_offset = 26 / res;
 float y_offset = 26 / res;
 float x_res = 52 / res;
 float y_res = 52 / res;
-float log_odd_occ = 0.05;
+float log_odd_occ = 0.5;
 float log_odd_free = 0.95;
 float count = 0.00;
 float observed_x = 0.00;
 float observed_y = 0.00;
 float goal_x = abs( (20.0 / res) - x_offset);
 float goal_y = abs( (0.0 / res) - y_offset);
-int estimate_x;
-int estimate_y;
+float estimate_x;
+float estimate_y;
+bool estimating = true;
 
 #define ROW 208
 #define COL 208
@@ -85,7 +86,7 @@ float heuristic(int x1, int y1) {
     float raw = sqrt( pow((x1 - goal_x), 2) + pow((y1 - goal_y), 2) );
 
     // we know that each wall adds at least one square more we need to travel
-    int wall = 0;
+    float wall = 0;
     std::vector<std::tuple<int,int>> points = bresen(x1, y1, goal_x, goal_y);
     for (int i = 0; i < points.size(); i++) {
         int row = std::get<0>(points[i]);
@@ -95,9 +96,9 @@ float heuristic(int x1, int y1) {
         float square = grid[row][col];
         mtx.unlock();
 
-        if (square >= 0.5) {
+        if (square > 0.5) {
             // wall hits add a lot of distance
-            wall += 20;
+            wall += 100 * square;
         }
     }
     return raw + wall;
@@ -147,7 +148,7 @@ bool isUnBlocked(int row, int col)
     float square = grid[row][col];
     mtx.unlock();
 
-    if (square < 0.5) {
+    if (square <= 0) {
       return true;
     } else {
       //cout << "(" << row << ", " << col << "): " << "BLOCKED" << endl;
@@ -169,11 +170,11 @@ bool isDestination(int row, int col)
 // Adapted from https://www.geeksforgeeks.org/a-search-algorithm/
 std::stack<Pair> aStarSearch(int x1, int y1) {
 
-  std::stack<Pair> path;
+  std::stack<Pair> path_a;
   // we're at the goal
   if (isDestination(x1, y1)) {
     cout << "Destination found" << endl;
-    return path;
+    return path_a;
   }
 
   bool closedList[(int)x_res][(int)y_res];
@@ -217,7 +218,7 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
   bool foundDest = false;
 
   while (!openList.empty())
-    {
+  {
         pPair p = *openList.begin();
 
         // Remove this vertex from the open list
@@ -265,9 +266,8 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
                 cellDetails[i-1][j].parent_i = i;
                 cellDetails[i-1][j].parent_j = j;
                 //printf ("The destination cell is found\n");
-                path = tracePath (cellDetails);
+                path_a = tracePath (cellDetails);
                 foundDest = true;
-                return path;
             }
             // If the successor is already on the closed
             // list or if it is blocked, then ignore it.
@@ -315,9 +315,9 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
                 cellDetails[i+1][j].parent_i = i;
                 cellDetails[i+1][j].parent_j = j;
                 //printf("The destination cell is found\n");
-                path = tracePath(cellDetails);
+                path_a = tracePath(cellDetails);
                 foundDest = true;
-                return path;
+                return path_a;
             }
             // If the successor is already on the closed
             // list or if it is blocked, then ignore it.
@@ -364,9 +364,9 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
                 cellDetails[i][j+1].parent_i = i;
                 cellDetails[i][j+1].parent_j = j;
                 //printf("The destination cell is found\n");
-                path = tracePath(cellDetails);
+                path_a = tracePath(cellDetails);
                 foundDest = true;
-                return path;
+                return path_a;
             }
 
             // If the successor is already on the closed
@@ -416,9 +416,9 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
                 cellDetails[i][j-1].parent_i = i;
                 cellDetails[i][j-1].parent_j = j;
                 //printf("The destination cell is found\n");
-                path = tracePath(cellDetails);
+                path_a = tracePath(cellDetails);
                 foundDest = true;
-                return path;
+                return path_a;
             }
 
             // If the successor is already on the closed
@@ -468,9 +468,9 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
                 cellDetails[i-1][j+1].parent_i = i;
                 cellDetails[i-1][j+1].parent_j = j;
                 //printf ("The destination cell is found\n");
-                tracePath (cellDetails);
+                path_a = tracePath (cellDetails);
                 foundDest = true;
-                return path;
+                return path_a;
             }
 
             // If the successor is already on the closed
@@ -520,9 +520,9 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
                 cellDetails[i-1][j-1].parent_i = i;
                 cellDetails[i-1][j-1].parent_j = j;
                 //printf ("The destination cell is found\n");
-                tracePath (cellDetails);
+                path_a = tracePath (cellDetails);
                 foundDest = true;
-                return path;
+                return path_a;
             }
 
             // If the successor is already on the closed
@@ -570,9 +570,9 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
                 cellDetails[i+1][j+1].parent_i = i;
                 cellDetails[i+1][j+1].parent_j = j;
                 //printf ("The destination cell is found\n");
-                tracePath (cellDetails);
+                path_a = tracePath (cellDetails);
                 foundDest = true;
-                return path;
+                return path_a;
             }
 
             // If the successor is already on the closed
@@ -622,9 +622,9 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
                 cellDetails[i+1][j-1].parent_i = i;
                 cellDetails[i+1][j-1].parent_j = j;
                 //printf("The destination cell is found\n");
-                path = tracePath(cellDetails);
+                path_a = tracePath(cellDetails);
                 foundDest = true;
-                return path;
+                return path_a;
             }
 
             // If the successor is already on the closed
@@ -669,7 +669,8 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
     if (foundDest == false)
         printf("Failed to find the Destination Cell\n");
 
-    return path;
+    cout << "Returning a path" << endl;
+    return path_a;
 }
 
 // DEBUG
@@ -715,13 +716,18 @@ void bresenham(int x1, int y1, int x2, int y2, int tgt_x, int tgt_y)
 void
 callback(Robot* robot)
 {
+    if (robot->at_goal()) {
+        cout << "WIN!" << endl;
+        return;
+    }
     std::vector<float> angles;
 
     mtx.lock();
-    int x = estimate_x;
-    int y = estimate_y;
+    float x = estimate_x;
+    float y = estimate_y;
     mtx.unlock();
 
+    bool stop = false;
     for (auto hit : robot->ranges) {
         if (hit.range <= 2) {
             // get hit info for the occupancy grid
@@ -759,10 +765,8 @@ callback(Robot* robot)
             }
         }
 
-        if (hit.range < 0.5) {
-            cout << "PROXIMITY ALERT!" << endl;
-            robot->set_vel(0, 0);
-            return;
+        if (hit.range < 1) {
+            stop = true;
         }
     }
 
@@ -783,15 +787,15 @@ callback(Robot* robot)
                 int angle = angle + (M_PI / 2.0);
                 float dx = 0.5 * 2 * cos(angle);
                 float dy = 0.5 * 2 * sin(angle);
-                int abs_x = round(x + dx);
-                int abs_y = round(y + dy);
+                float abs_x = x + dx;
+                float abs_y = y + dy;
                 abs_x = abs_x / res;
                 abs_y = abs_y / res;
-                int adj_x = abs(abs_x - x_offset);
-                int adj_y = abs(abs_y - y_offset);
+                int adj_x = round(abs(abs_x - x_offset));
+                int adj_y = round(abs(abs_y - y_offset));
 
-                int start_x = abs(x/res - x_offset);
-                int start_y = abs(y/res - y_offset);
+                int start_x = round(abs(x/res - x_offset));
+                int start_y = round(abs(y/res - y_offset));
 
                 if (start_x > adj_x && start_y > adj_y) {
                     bresenham(adj_x, adj_y, start_x, start_y, -1, -1);
@@ -804,29 +808,88 @@ callback(Robot* robot)
     }
 
     // now pathfind - align left, top, right, down
-    std::pair<int,int> p = curr_path.top();
-    curr_path.pop();
-    int tgt_x = round(p.first);
-    int tgt_y = round(p.second);
+    int tgt_x = 0;
+    int tgt_y = 0;
+    int adj_x = 0;
+    int adj_y = 0;
+    cout << "Start" << endl;
+    while (adj_x == tgt_x && adj_y == tgt_y) {
+        std::pair<int,int> p = curr_path.top();
+        curr_path.pop();
+        tgt_x = round(p.first);
+        tgt_y = round(p.second);
 
-    float east = 1.57;
-    float northeast = 0.785;
-    float north = 0.0;
-    float northwest = -0.785;
-    float west = -1.57;
-    float southeast = 2.35;
-    float south = 3.14;
-    float southwest = -2.35;
-
-
-    cout << "heading to " << tgt_x << ", " << tgt_y << endl;
-    if (x < estimate_x && y == estimate_y) {
-        cout << "heading up" << endl;
-        robot->set_vel(1.0, 1.0); // move up
-    } else if (x < estimate_x && y < estimate_y) {
-        robot->set_vel()
+        mtx.lock();
+        float abs_x = estimate_x;
+        float abs_y = estimate_y;
+        mtx.unlock();
+        abs_x = abs_x / res;
+        abs_y = abs_y / res;
+        adj_x = round(abs(abs_x - x_offset));
+        adj_y = round(abs(abs_y - y_offset));
     }
 
+    cout << "Current: " << adj_x << ", " << adj_y << endl;
+    cout << "Target: " << tgt_x << ", " << tgt_y << endl;
+    cout << "Target h: " << heuristic(tgt_x, tgt_y) << endl;
+    mtx.lock();
+    cout << "Target wall: " << grid[tgt_x][tgt_y] << endl;
+    mtx.unlock();
+
+    float west = 1.57;
+    float northwest = 0.785;
+    float north = 0.0;
+    float northeast = -0.785;
+    float east = -1.57;
+    float southwest = 2.35;
+    float south = 3.14;
+    float southeast = -2.35;
+
+    // find what direction we want to go
+    float tgt_heading;
+    if (tgt_x < adj_x && tgt_y == adj_y) {
+        tgt_heading = north;
+    } else if (tgt_x < adj_x && tgt_y < adj_y) {
+        tgt_heading = west; // northwest
+    } else if (tgt_x == adj_x && tgt_y < adj_y) {
+        tgt_heading = west;
+    } else if (tgt_x > adj_x && tgt_y < adj_y) {
+        tgt_heading = south; // southwest
+    } else if (tgt_x > adj_x && tgt_y == adj_y) {
+        tgt_heading = south;
+    } else if (tgt_x > adj_x && tgt_y > adj_y) {
+        tgt_heading = east; // southeast
+    } else if (tgt_x == adj_x && tgt_y > adj_y) {
+        tgt_heading = east;
+    } else if (tgt_x < adj_x && tgt_y > adj_y) {
+        tgt_heading = east; // northeast
+    }
+
+    cout << "Current heading: " << robot->pos_t << endl;
+    cout << "Desired heading " << tgt_heading << endl;
+    bool turning = false;
+    if (robot->pos_t < tgt_heading) {
+        turning = true;
+        robot->set_vel(0, 2); // turn left
+    } else {
+        turning = true;
+        robot->set_vel(2, 0); // turn right
+    }
+
+    if (abs(robot->pos_t - tgt_heading) < 0.1) {
+        turning = false;
+    }
+
+    if (!turning) {
+        cout << "Forward" << endl;
+        robot->set_vel(1.0, 1.0);
+    }
+
+    if (stop) {
+        if (robot->pos_t < 1) {
+            robot->set_vel(-1, 1);
+        }
+    }
 
     return;
 }
@@ -841,29 +904,16 @@ void
 draw_thread(Robot* robot)
 {
     while (true) {
-        if (count < 2000) {
-            count++;
-            observed_x += robot->pos_x;
-            observed_y += robot->pos_y;
-        } else {
-            mtx.lock();
-            estimate_x = observed_x / count;
-            estimate_y = observed_y / count;
-            mtx.unlock();
-            count = 0;
-            observed_x = 0;
-            observed_y = 0;
-            clear();
-        }
-
+        std::this_thread::sleep_for (std::chrono::seconds(1));
+        clear();
         //cout << "Drawing grid" << endl;
         for (int i = 0; i < 208; i++) {
             for (int j = 0; j < 208; j++) {
                 mtx.lock();
                 float confidence = grid[i][j];
                 mtx.unlock();
-                if (confidence > 0.7) {
-                    //cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
+                if (confidence > 0) {
+                    cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
                     draw_index(j, i);
                 }
             }
@@ -874,7 +924,7 @@ draw_thread(Robot* robot)
 void
 loc_thread(Robot* robot)
 {
-    bool estimating;
+    int count = 0;
     while (true) {
         if (count < 2000) {
             estimating = true;
@@ -890,13 +940,18 @@ loc_thread(Robot* robot)
             count = 0;
             observed_x = 0;
             observed_y = 0;
-      }
+        }
+    }
+}
 
-      if (estimating) {
-          continue;
-      } else {
+void
+plan_thread(Robot* robot)
+{
+    while(true){
+        mtx.lock();
         float abs_x = estimate_x;
         float abs_y = estimate_y;
+        mtx.unlock();
         abs_x = abs_x / res;
         abs_y = abs_y / res;
         float adj_x = abs(abs_x - x_offset);
@@ -907,13 +962,10 @@ loc_thread(Robot* robot)
         std::stack<Pair> path;
         path = aStarSearch(adj_x, adj_y);
 
-        mtx.lock();
         curr_path = path;
-        mtx.unlock();
-      }
-
-  }
+    }
 }
+
 
 
 int
@@ -921,10 +973,10 @@ main(int argc, char* argv[])
 {
     cout << "making robot" << endl;
     Robot robot(argc, argv, callback);
+    std::thread lthr(loc_thread, &robot);
+    std::thread pthr(plan_thread, &robot);
     std::thread rthr(robot_thread, &robot);
     std::thread dthr(draw_thread, &robot);
-    std::thread lthr(loc_thread, &robot);
-
 
     /*
     std::vector<std::tuple<int, int>> points = bresen(0, 0, 3, 3);
