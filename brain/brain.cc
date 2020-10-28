@@ -18,8 +18,8 @@ float x_offset = 26 / res;
 float y_offset = 26 / res;
 float x_res = 52 / res;
 float y_res = 52 / res;
-float log_odd_occ = 0.5;
-float log_odd_free = 0.95;
+float log_odd_occ = 1;
+float log_odd_free = 1;
 float count = 0.00;
 float observed_x = 0.00;
 float observed_y = 0.00;
@@ -27,7 +27,13 @@ float goal_x = abs( (20.0 / res) - x_offset);
 float goal_y = abs( (0.0 / res) - y_offset);
 float estimate_x;
 float estimate_y;
+float tgt_heading = 0;
 bool estimating = true;
+bool front_clear = true;
+bool blocked = true;
+bool path_found = false;
+int tgt_x, tgt_y;
+int adj_x, adj_y;
 
 #define ROW 208
 #define COL 208
@@ -81,27 +87,28 @@ std::vector<std::tuple<int,int>> bresen(int x1, int y1, int x2, int y2)
     return points;
 }
 
+float distance(int x1, int y1, int x2, int y2) {
+    return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) * 1.0);
+}
+
 float heuristic(int x1, int y1) {
     // straight line distance to the goal
     float raw = sqrt( pow((x1 - goal_x), 2) + pow((y1 - goal_y), 2) );
 
     // we know that each wall adds at least one square more we need to travel
-    float wall = 0;
+    //float wall = 0;
+    float square = 0;
     std::vector<std::tuple<int,int>> points = bresen(x1, y1, goal_x, goal_y);
+    raw += grid[x1][y1];
     for (int i = 0; i < points.size(); i++) {
         int row = std::get<0>(points[i]);
         int col = std::get<1>(points[i]);
 
-        mtx.lock();
-        float square = grid[row][col];
-        mtx.unlock();
+        square = grid[row][col];
 
-        if (square > 0.5) {
-            // wall hits add a lot of distance
-            wall += 100 * square;
-        }
+        raw += square;
     }
-    return raw + wall;
+    return raw;
 }
 
 // A Utility Function to trace the path from the source
@@ -118,6 +125,7 @@ std::stack<Pair> tracePath(cell cellDetails[][COL])
              && cellDetails[row][col].parent_j == col ))
     {
         Path.push (std::make_pair (row, col));
+        grid[row][col] = 1;
         int temp_row = cellDetails[row][col].parent_i;
         int temp_col = cellDetails[row][col].parent_j;
         row = temp_row;
@@ -125,6 +133,7 @@ std::stack<Pair> tracePath(cell cellDetails[][COL])
     }
 
     Path.push (std::make_pair (row, col));
+    grid[row][col] = 1;
 
     return Path;
 }
@@ -135,8 +144,8 @@ bool isValid(int row, int col)
 {
     // Returns true if row number and column number
     // is in range
-    return (row >= 0) && (row < x_res) &&
-           (col >= 0) && (col < y_res);
+    return (row >= 0) && (row < 208) &&
+           (col >= 0) && (col < 208);
 }
 
 // A Utility Function to check whether the given cell is
@@ -148,6 +157,7 @@ bool isUnBlocked(int row, int col)
     float square = grid[row][col];
     mtx.unlock();
 
+    return true;
     if (square <= 0) {
       return true;
     } else {
@@ -161,9 +171,9 @@ bool isUnBlocked(int row, int col)
 bool isDestination(int row, int col)
 {
     if (row == goal_x && col == goal_y)
-        return (true);
+        return true;
     else
-        return (false);
+        return false;
 }
 
 // A start function for finding goal
@@ -666,17 +676,14 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
     // list is empty, then we conclude that we failed to
     // reach the destiantion cell. This may happen when the
     // there is no way to destination cell (due to blockages)
-    if (foundDest == false)
+    if (foundDest == false) {
         printf("Failed to find the Destination Cell\n");
+        std::stack<Pair> path_empty;
+        return path_empty;
+    }
 
-    cout << "Returning a path" << endl;
     return path_a;
 }
-
-// DEBUG
-
-
-
 
 // Assumptions :
 // 1) Line is drawn from left to right.
@@ -716,6 +723,10 @@ void bresenham(int x1, int y1, int x2, int y2, int tgt_x, int tgt_y)
 void
 callback(Robot* robot)
 {
+    if (!path_found) {
+        return;
+    }
+
     if (robot->at_goal()) {
         cout << "WIN!" << endl;
         return;
@@ -732,6 +743,13 @@ callback(Robot* robot)
         if (hit.range <= 2) {
             // get hit info for the occupancy grid
             angles.push_back(hit.angle);
+            if ((-0.2 < abs(hit.angle) < 0.2) || ((abs(hit.angle) - 0.785) < 0.2)) {
+                if (hit.range < 0.5) {
+                    mtx.lock();
+                    front_clear = false;
+                    mtx.unlock();
+                }
+            }
 
             int angle = hit.angle + (M_PI / 2.0);
             float dx = 0.5 * hit.range * cos(angle);
@@ -747,22 +765,27 @@ callback(Robot* robot)
 
             float start_x = abs(x/res - x_offset);
             float start_y = abs(y/res - y_offset);
-            start_x = ceil(start_x);
-            start_y = ceil(start_y);
+            start_x = round(start_x);
+            start_y = round(start_y);
             start_x = clamp(0, start_x, 207);
             start_y = clamp(0, start_y, 207);
 
             //cout << "HIT: (" << (int)adj_x << ", " << (int)adj_y << ") " << endl;
             mtx.lock();
-            grid[(int)adj_x][(int)adj_y] += log_odd_occ;
+            adj_x = clamp(1, adj_x, 206);
+            adj_y = clamp(1, adj_y, 206);
+            grid[(int) round(adj_x)][(int) round(adj_y)] += log_odd_occ;
+
             mtx.unlock();
 
             // update misses
+            /*
             if (start_x > adj_x && start_y > adj_y) {
                 bresenham(adj_x, adj_y, start_x, start_y, adj_x, adj_y);
             } else {
                 bresenham(start_x, start_y, adj_x, adj_y, adj_x, adj_y);
             }
+            */
         }
 
         if (hit.range < 1) {
@@ -797,100 +820,40 @@ callback(Robot* robot)
                 int start_x = round(abs(x/res - x_offset));
                 int start_y = round(abs(y/res - y_offset));
 
+                /*
                 if (start_x > adj_x && start_y > adj_y) {
                     bresenham(adj_x, adj_y, start_x, start_y, -1, -1);
                 } else {
                     bresenham(start_x, start_y, adj_x, adj_y, -1, -1);
                 }
+                */
             }
         }
         size++;
     }
 
-    // now pathfind - align left, top, right, down
-    int tgt_x = 0;
-    int tgt_y = 0;
-    int adj_x = 0;
-    int adj_y = 0;
-    cout << "Start" << endl;
-    while (adj_x == tgt_x && adj_y == tgt_y) {
-        std::pair<int,int> p = curr_path.top();
-        curr_path.pop();
-        tgt_x = round(p.first);
-        tgt_y = round(p.second);
-
-        mtx.lock();
-        float abs_x = estimate_x;
-        float abs_y = estimate_y;
-        mtx.unlock();
-        abs_x = abs_x / res;
-        abs_y = abs_y / res;
-        adj_x = round(abs(abs_x - x_offset));
-        adj_y = round(abs(abs_y - y_offset));
-    }
-
-    cout << "Current: " << adj_x << ", " << adj_y << endl;
-    cout << "Target: " << tgt_x << ", " << tgt_y << endl;
-    cout << "Target h: " << heuristic(tgt_x, tgt_y) << endl;
-    mtx.lock();
-    cout << "Target wall: " << grid[tgt_x][tgt_y] << endl;
-    mtx.unlock();
-
-    float west = 1.57;
-    float northwest = 0.785;
-    float north = 0.0;
-    float northeast = -0.785;
-    float east = -1.57;
-    float southwest = 2.35;
-    float south = 3.14;
-    float southeast = -2.35;
-
-    // find what direction we want to go
-    float tgt_heading;
-    if (tgt_x < adj_x && tgt_y == adj_y) {
-        tgt_heading = north;
-    } else if (tgt_x < adj_x && tgt_y < adj_y) {
-        tgt_heading = west; // northwest
-    } else if (tgt_x == adj_x && tgt_y < adj_y) {
-        tgt_heading = west;
-    } else if (tgt_x > adj_x && tgt_y < adj_y) {
-        tgt_heading = south; // southwest
-    } else if (tgt_x > adj_x && tgt_y == adj_y) {
-        tgt_heading = south;
-    } else if (tgt_x > adj_x && tgt_y > adj_y) {
-        tgt_heading = east; // southeast
-    } else if (tgt_x == adj_x && tgt_y > adj_y) {
-        tgt_heading = east;
-    } else if (tgt_x < adj_x && tgt_y > adj_y) {
-        tgt_heading = east; // northeast
-    }
-
-    cout << "Current heading: " << robot->pos_t << endl;
-    cout << "Desired heading " << tgt_heading << endl;
     bool turning = false;
     if (robot->pos_t < tgt_heading) {
         turning = true;
-        robot->set_vel(0, 2); // turn left
+        robot->set_vel(-2, 2); // turn left
     } else {
         turning = true;
-        robot->set_vel(2, 0); // turn right
+        robot->set_vel(2, -2); // turn right
     }
 
     if (abs(robot->pos_t - tgt_heading) < 0.1) {
         turning = false;
     }
 
-    if (!turning) {
-        cout << "Forward" << endl;
+    if (!turning && front_clear) {
         robot->set_vel(1.0, 1.0);
-    }
+    } else if (!turning && !front_clear){
+        mtx.lock();
+        grid[tgt_x][tgt_y] += 1;
+        stop = false;
+        mtx.unlock();
 
-    if (stop) {
-        if (robot->pos_t < 1) {
-            robot->set_vel(-1, 1);
-        }
     }
-
     return;
 }
 
@@ -903,17 +866,17 @@ robot_thread(Robot* robot)
 void
 draw_thread(Robot* robot)
 {
+    std::this_thread::sleep_for (std::chrono::seconds(2));
     while (true) {
-        std::this_thread::sleep_for (std::chrono::seconds(1));
-        clear();
         //cout << "Drawing grid" << endl;
+        //clear();
         for (int i = 0; i < 208; i++) {
             for (int j = 0; j < 208; j++) {
                 mtx.lock();
                 float confidence = grid[i][j];
                 mtx.unlock();
-                if (confidence > 0) {
-                    cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
+                if (confidence == 1) {
+                    //cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
                     draw_index(j, i);
                 }
             }
@@ -948,21 +911,83 @@ void
 plan_thread(Robot* robot)
 {
     while(true){
-        mtx.lock();
-        float abs_x = estimate_x;
-        float abs_y = estimate_y;
-        mtx.unlock();
+        float abs_x = robot->pos_x;
+        float abs_y = robot->pos_y;
+
         abs_x = abs_x / res;
         abs_y = abs_y / res;
-        float adj_x = abs(abs_x - x_offset);
-        float adj_y = abs(abs_y - y_offset);
+        float adj_x = round(abs(abs_x - x_offset));
+        float adj_y = round(abs(abs_y - y_offset));
         adj_x = clamp(0, adj_x, 207);
         adj_y = clamp(0, adj_y, 207);
 
         std::stack<Pair> path;
-        path = aStarSearch(adj_x, adj_y);
+        while (path.size() == 0) {
+            path = aStarSearch(adj_x, adj_y);
+        }
 
+        mtx.lock();
         curr_path = path;
+        path_found = true;
+        mtx.unlock();
+
+        std::pair<int,int> p = curr_path.top();
+        curr_path.pop();
+        mtx.lock();
+        tgt_x = round(p.first);
+        tgt_y = round(p.second);
+        mtx.unlock();
+
+        while (distance(adj_x, adj_y, tgt_x, tgt_y) < 2) {
+            std::pair<int,int> p = curr_path.top();
+            curr_path.pop();
+            mtx.lock();
+            tgt_x = round(p.first);
+            tgt_y = round(p.second);
+            mtx.unlock();
+            if (goal_x == tgt_x && goal_y == tgt_y) {
+                break;
+            }
+        }
+
+        cout << "Current: " << adj_x << ", " << adj_y << endl;
+        cout << "Target: " << tgt_x << ", " << tgt_y << endl;
+        cout << "Goal: " << goal_x << ", " << goal_y << endl;
+        cout << "Target h: " << heuristic(tgt_x, tgt_y) << endl;
+        cout << "Target wall: " << grid[tgt_x][tgt_y] << endl;
+        //cout << "Blocked: " << blocked << endl;
+        cout << "Current heading: " << robot->pos_t << endl;
+        cout << "Desired heading " << tgt_heading << endl;
+
+        float west = 1.57;
+        float northwest = 0.785;
+        float north = 0.0;
+        float northeast = -0.785;
+        float east = -1.57;
+        float southwest = 2.35;
+        float south = 3.14;
+        float southeast = -2.35;
+
+        // find what direction we want to go
+        mtx.lock();
+        if (tgt_x < adj_x && tgt_y == adj_y) {
+            tgt_heading = north;
+        } else if (tgt_x < adj_x && tgt_y < adj_y) {
+            tgt_heading = northwest; // northwest
+        } else if (tgt_x == adj_x && tgt_y < adj_y) {
+            tgt_heading = west;
+        } else if (tgt_x > adj_x && tgt_y < adj_y) {
+            tgt_heading = southwest; // southwest
+        } else if (tgt_x > adj_x && tgt_y == adj_y) {
+            tgt_heading = south;
+        } else if (tgt_x > adj_x && tgt_y > adj_y) {
+            tgt_heading = southeast; // southeast
+        } else if (tgt_x == adj_x && tgt_y > adj_y) {
+            tgt_heading = east;
+        } else if (tgt_x < adj_x && tgt_y > adj_y) {
+            tgt_heading = northeast; // northeast
+        }
+        mtx.unlock();
     }
 }
 
@@ -977,15 +1002,6 @@ main(int argc, char* argv[])
     std::thread pthr(plan_thread, &robot);
     std::thread rthr(robot_thread, &robot);
     std::thread dthr(draw_thread, &robot);
-
-    /*
-    std::vector<std::tuple<int, int>> points = bresen(0, 0, 3, 3);
-    for (int i = 0; i < points.size(); i++) {
-        std::tuple<int, int> point = points.at(i);
-        cout << std::get<0>(point) << std::get<1>(point)  << endl;
-    }
-    */
-
 
     return viz_run(argc, argv);
 }
