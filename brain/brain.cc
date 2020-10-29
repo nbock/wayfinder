@@ -30,6 +30,8 @@ float estimate_y;
 float tgt_heading = 0;
 bool estimating = true;
 bool front_clear = true;
+bool right_clear = true;
+bool left_clear = true;
 bool blocked = true;
 bool path_found = false;
 int tgt_x, tgt_y;
@@ -49,7 +51,7 @@ typedef std::pair<int, int> Pair;
 // Creating a shortcut for pair<int, pair<int, int>> type
 typedef std::pair<double, std::pair<int, int>> pPair;
 
-std::stack<Pair> curr_path;
+std::vector<Pair> curr_path;
 
 // A structure to hold the neccesary parameters
 struct cell
@@ -98,42 +100,58 @@ float heuristic(int x1, int y1) {
     // we know that each wall adds at least one square more we need to travel
     //float wall = 0;
     float square = 0;
-    std::vector<std::tuple<int,int>> points = bresen(x1, y1, goal_x, goal_y);
+    std::vector<std::tuple<int,int>> points;
+    if (x1 > goal_x && y1 > goal_y) {
+        points = bresen(x1, y1, goal_x, goal_y);
+    } else {
+        points = bresen(goal_x, goal_y, x1, y1);
+    }
+
     raw += grid[x1][y1];
     for (int i = 0; i < points.size(); i++) {
         int row = std::get<0>(points[i]);
         int col = std::get<1>(points[i]);
+        row = clamp(0, row, 207);
+        col = clamp(0, col, 207);
 
+        // SEGFAULT ON THESE?
         square = grid[row][col];
+        square += grid[row - 1][col - 1] * 0.5;
+        square += grid[row - 1][col + 1] * 0.5;
+        square += grid[row - 1][col] * 0.5;
+        square += grid[row + 1][col - 1] * 0.5;
+        square += grid[row + 1][col + 1] * 0.5;
+        square += grid[row + 1][col] * 0.5;
+        square += grid[row][col + 1] * 0.5;
+        square += grid[row][col - 1] * 0.5;
 
         raw += square;
     }
+
     return raw;
 }
 
 // A Utility Function to trace the path from the source
 // to destination
-std::stack<Pair> tracePath(cell cellDetails[][COL])
+std::vector<Pair> tracePath(cell cellDetails[][COL])
 {
     //printf ("\nThe Path is ");
     int row = goal_x;
     int col = goal_y;
 
-    std::stack<Pair> Path;
+    std::vector<Pair> Path;
 
     while (!(cellDetails[row][col].parent_i == row
              && cellDetails[row][col].parent_j == col ))
     {
-        Path.push (std::make_pair (row, col));
-        grid[row][col] = 1;
+        Path.push_back (std::make_pair (row, col));
         int temp_row = cellDetails[row][col].parent_i;
         int temp_col = cellDetails[row][col].parent_j;
         row = temp_row;
         col = temp_col;
     }
 
-    Path.push (std::make_pair (row, col));
-    grid[row][col] = 1;
+    Path.push_back (std::make_pair (row, col));
 
     return Path;
 }
@@ -178,9 +196,9 @@ bool isDestination(int row, int col)
 
 // A start function for finding goal
 // Adapted from https://www.geeksforgeeks.org/a-search-algorithm/
-std::stack<Pair> aStarSearch(int x1, int y1) {
+std::vector<Pair> aStarSearch(int x1, int y1) {
 
-  std::stack<Pair> path_a;
+  std::vector<Pair> path_a;
   // we're at the goal
   if (isDestination(x1, y1)) {
     cout << "Destination found" << endl;
@@ -678,7 +696,7 @@ std::stack<Pair> aStarSearch(int x1, int y1) {
     // there is no way to destination cell (due to blockages)
     if (foundDest == false) {
         printf("Failed to find the Destination Cell\n");
-        std::stack<Pair> path_empty;
+        std::vector<Pair> path_empty;
         return path_empty;
     }
 
@@ -740,13 +758,25 @@ callback(Robot* robot)
 
     bool stop = false;
     for (auto hit : robot->ranges) {
-        if (hit.range <= 2) {
+        if (hit.range <= 100) {
             // get hit info for the occupancy grid
             angles.push_back(hit.angle);
             if ((-0.2 < abs(hit.angle) < 0.2) || ((abs(hit.angle) - 0.785) < 0.2)) {
-                if (hit.range < 0.5) {
+                if (hit.range <= 1) {
                     mtx.lock();
                     front_clear = false;
+                    mtx.unlock();
+                }
+            } else if ((hit.angle - 1.57) < 0.2) {
+                if (hit.range <= 1) {
+                    mtx.lock();
+                    left_clear = false;
+                    mtx.unlock();
+                }
+            } else if ((abs(hit.angle) - 1.57) < 0.2) {
+                if (hit.range <= 1) {
+                    mtx.lock();
+                    right_clear = false;
                     mtx.unlock();
                 }
             }
@@ -770,25 +800,25 @@ callback(Robot* robot)
             start_x = clamp(0, start_x, 207);
             start_y = clamp(0, start_y, 207);
 
-            //cout << "HIT: (" << (int)adj_x << ", " << (int)adj_y << ") " << endl;
+            //SEGFAULT HERE?
             mtx.lock();
-            adj_x = clamp(1, adj_x, 206);
-            adj_y = clamp(1, adj_y, 206);
-            grid[(int) round(adj_x)][(int) round(adj_y)] += log_odd_occ;
-
+            adj_x = clamp(1, adj_x, 207);
+            adj_y = clamp(1, adj_y, 207);
+            grid[(int)adj_x][(int)adj_y] += 100;
+            int row = adj_x;
+            int col = adj_y;
+            grid[row - 1][col - 1] += 100;
+            grid[row - 1][col + 1] += 100;
+            grid[row - 1][col] += 100;
+            grid[row + 1][col - 1] += 100;
+            grid[row + 1][col + 1] += 100;
+            grid[row + 1][col] += 100;
+            grid[row][col + 1] += 100;
+            grid[row][col - 1] += 100;
             mtx.unlock();
-
-            // update misses
-            /*
-            if (start_x > adj_x && start_y > adj_y) {
-                bresenham(adj_x, adj_y, start_x, start_y, adj_x, adj_y);
-            } else {
-                bresenham(start_x, start_y, adj_x, adj_y, adj_x, adj_y);
-            }
-            */
         }
 
-        if (hit.range < 1) {
+        if (hit.range < 1.0) {
             stop = true;
         }
     }
@@ -806,6 +836,19 @@ callback(Robot* robot)
                }
             }
             if (!found) {
+                if ((-0.2 < abs(angle) < 0.2) || ((abs(angle) - 0.785) < 0.2)) {
+                    mtx.lock();
+                    front_clear = true;
+                    mtx.unlock();
+                } else if ((angle - 1.57) < 0.2) {
+                    mtx.lock();
+                    left_clear = false;
+                    mtx.unlock();
+                } else if ((abs(angle) - 1.57) < 0.2) {
+                    mtx.lock();
+                    right_clear = false;
+                    mtx.unlock();
+                }
                 //cout << "Updating a miss on " << angle << endl;
                 int angle = angle + (M_PI / 2.0);
                 float dx = 0.5 * 2 * cos(angle);
@@ -819,20 +862,13 @@ callback(Robot* robot)
 
                 int start_x = round(abs(x/res - x_offset));
                 int start_y = round(abs(y/res - y_offset));
-
-                /*
-                if (start_x > adj_x && start_y > adj_y) {
-                    bresenham(adj_x, adj_y, start_x, start_y, -1, -1);
-                } else {
-                    bresenham(start_x, start_y, adj_x, adj_y, -1, -1);
-                }
-                */
             }
         }
         size++;
     }
 
     bool turning = false;
+
     if (robot->pos_t < tgt_heading) {
         turning = true;
         robot->set_vel(-2, 2); // turn left
@@ -845,15 +881,46 @@ callback(Robot* robot)
         turning = false;
     }
 
+    if ((-3.1 < robot->pos_t < -2.7) && (tgt_heading == 3.14) ) {
+        robot->set_vel(1, -1); // turn right
+    } else if ((2.7 < robot->pos_t < 3.1) && (tgt_heading == 3.14)) {
+        robot->set_vel(-1, 1); // turn left
+    }
+
+
+    if (tgt_heading == 0 && robot->pos_t < 0 && !left_clear) {
+        mtx.lock();
+        //grid[tgt_x][tgt_y] += 100;
+        mtx.unlock();
+        blocked = true;
+    } else if (tgt_heading == 0 && robot->pos_t > 0 && !right_clear) {
+        mtx.lock();
+        //grid[tgt_x][tgt_y] += 100;
+        mtx.unlock();
+        blocked = true;
+    }
+
     if (!turning && front_clear) {
         robot->set_vel(1.0, 1.0);
-    } else if (!turning && !front_clear){
+    }
+
+    if (!turning && !front_clear){
+        robot->set_vel(0, 0);
         mtx.lock();
-        grid[tgt_x][tgt_y] += 1;
+        //grid[tgt_x][tgt_y] += 10;
+        stop = false;
+        blocked = true;
+        mtx.unlock();
+    }
+
+    if (stop) {
+        robot->set_vel(0, 0);
+        mtx.lock();
+        //grid[tgt_x][tgt_y] += 100;
         stop = false;
         mtx.unlock();
-
     }
+
     return;
 }
 
@@ -867,20 +934,18 @@ void
 draw_thread(Robot* robot)
 {
     std::this_thread::sleep_for (std::chrono::seconds(2));
+    int count = 0;
     while (true) {
-        //cout << "Drawing grid" << endl;
-        //clear();
-        for (int i = 0; i < 208; i++) {
-            for (int j = 0; j < 208; j++) {
-                mtx.lock();
-                float confidence = grid[i][j];
-                mtx.unlock();
-                if (confidence == 1) {
-                    //cout << "Drawn: " << i << ", " << j << " Confidence: " << grid[i][j] << endl;
-                    draw_index(j, i);
-                }
-            }
+        std::vector<Pair> drawing;
+        mtx.lock();
+        drawing = curr_path;
+        mtx.unlock();
+
+        for (int i = 0; i < drawing.size(); i++) {
+            Pair point = drawing.at(i);
+            draw_index(point.second, point.first);
         }
+        std::this_thread::sleep_for (std::chrono::seconds(2));
     }
 }
 
@@ -921,32 +986,38 @@ plan_thread(Robot* robot)
         adj_x = clamp(0, adj_x, 207);
         adj_y = clamp(0, adj_y, 207);
 
-        std::stack<Pair> path;
-        while (path.size() == 0) {
-            path = aStarSearch(adj_x, adj_y);
-        }
-
-        mtx.lock();
-        curr_path = path;
-        path_found = true;
-        mtx.unlock();
-
-        std::pair<int,int> p = curr_path.top();
-        curr_path.pop();
-        mtx.lock();
-        tgt_x = round(p.first);
-        tgt_y = round(p.second);
-        mtx.unlock();
-
-        while (distance(adj_x, adj_y, tgt_x, tgt_y) < 2) {
-            std::pair<int,int> p = curr_path.top();
-            curr_path.pop();
+        if (blocked || (adj_x == tgt_x && adj_y == tgt_y)
+        || (abs(adj_x - tgt_x) > 2) || (abs(adj_y - tgt_y) > 2)
+        || true) {
+            clear_screen();
+            std::vector<Pair> path;
+            while (path.size() == 0) {
+                path = aStarSearch(adj_x, adj_y);
+            }
+            blocked = false;
             mtx.lock();
-            tgt_x = round(p.first);
-            tgt_y = round(p.second);
+            curr_path = path;
+            path_found = true;
             mtx.unlock();
-            if (goal_x == tgt_x && goal_y == tgt_y) {
-                break;
+
+            mtx.lock();
+            std::pair<int,int> p = curr_path.back();
+            curr_path.erase(curr_path.end());
+            tgt_x = p.first;
+            tgt_y = p.second;
+            mtx.unlock();
+
+
+            while (distance(adj_x, adj_y, tgt_x, tgt_y) <= 0) {
+                std::pair<int,int> p = curr_path.back();
+                curr_path.erase(curr_path.end());
+                mtx.lock();
+                tgt_x = p.first;
+                tgt_y = p.second;
+                mtx.unlock();
+                if (goal_x == tgt_x && goal_y == tgt_y) {
+                    break;
+                }
             }
         }
 
@@ -955,7 +1026,7 @@ plan_thread(Robot* robot)
         cout << "Goal: " << goal_x << ", " << goal_y << endl;
         cout << "Target h: " << heuristic(tgt_x, tgt_y) << endl;
         cout << "Target wall: " << grid[tgt_x][tgt_y] << endl;
-        //cout << "Blocked: " << blocked << endl;
+        cout << "Blocked: " << blocked << endl;
         cout << "Current heading: " << robot->pos_t << endl;
         cout << "Desired heading " << tgt_heading << endl;
 
@@ -999,8 +1070,8 @@ main(int argc, char* argv[])
     cout << "making robot" << endl;
     Robot robot(argc, argv, callback);
     std::thread lthr(loc_thread, &robot);
-    std::thread pthr(plan_thread, &robot);
     std::thread rthr(robot_thread, &robot);
+    std::thread pthr(plan_thread, &robot);
     std::thread dthr(draw_thread, &robot);
 
     return viz_run(argc, argv);

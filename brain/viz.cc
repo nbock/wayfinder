@@ -129,9 +129,9 @@ button_press_event_cb(GtkWidget      *widget,
     {
         draw_brush(widget, event->x, event->y);
     }
-    else 
+    else
     */
-      
+
     if (event->button == GDK_BUTTON_SECONDARY)
     {
         clear_surface();
@@ -231,7 +231,7 @@ draw_index(int x, int y)
 }
 
 void
-clear()
+clear_screen()
 {
     clear_surface();
 }
@@ -262,9 +262,9 @@ viz_hit(float range, float angle, float x, float y)
     int xx = dx + x;
     int yy = dx + y;
     ww = x;
-    hh = y; 
+    hh = y;
 
-    
+
     //xx = ww + (ww*dx);
     //yy = hh - (hh + (hh*dy));
     cout << "dx: " << dx << endl;
@@ -283,7 +283,7 @@ viz_hit(float range, float angle, float x, float y)
     int abs_y = round(y + dy);
     int adj_x = abs_x + 26 / 0.25;
     int adj_y = abs_y + 26 / 0.25;
-  
+
     cout << "Viz hit" << endl;
     //draw_brush(drawing_area, adj_x * 10, adj_y * 10);
 
