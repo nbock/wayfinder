@@ -93,6 +93,19 @@ float distance(int x1, int y1, int x2, int y2) {
     return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) * 1.0);
 }
 
+float
+ang_diff(float aa, float bb)
+{
+    float cc = aa - bb;
+    while (cc > M_PI) {
+        cc -= M_PI;
+    }
+    while (cc < -M_PI) {
+        cc += M_PI;
+    }
+    return cc;
+}
+
 float heuristic(int x1, int y1) {
     // straight line distance to the goal
     float raw = sqrt( pow((x1 - goal_x), 2) + pow((y1 - goal_y), 2) );
@@ -819,7 +832,10 @@ callback(Robot* robot)
         }
 
         if (hit.range < 1.0) {
+            mtx.lock();
             stop = true;
+            grid[adj_x][adj_y] += 20;
+            mtx.unlock();
         }
     }
 
@@ -890,12 +906,12 @@ callback(Robot* robot)
 
     if (tgt_heading == 0 && robot->pos_t < 0 && !left_clear) {
         mtx.lock();
-        //grid[tgt_x][tgt_y] += 100;
+        grid[tgt_x][tgt_y] += 100;
         mtx.unlock();
         blocked = true;
     } else if (tgt_heading == 0 && robot->pos_t > 0 && !right_clear) {
         mtx.lock();
-        //grid[tgt_x][tgt_y] += 100;
+        grid[tgt_x][tgt_y] += 100;
         mtx.unlock();
         blocked = true;
     }
@@ -907,19 +923,48 @@ callback(Robot* robot)
     if (!turning && !front_clear){
         robot->set_vel(0, 0);
         mtx.lock();
-        //grid[tgt_x][tgt_y] += 10;
+        grid[tgt_x][tgt_y] += 10;
         stop = false;
         blocked = true;
         mtx.unlock();
     }
 
     if (stop) {
-        robot->set_vel(0, 0);
         mtx.lock();
-        //grid[tgt_x][tgt_y] += 100;
+        grid[tgt_x][tgt_y] += 100;
         stop = false;
         mtx.unlock();
     }
+
+    if (robot->ranges.size() < 5) {
+        return;
+    }
+
+    /*
+    float _lft = clamp(0.0, robot->ranges[2].range, 2.0);
+    float fwd = clamp(0.0, robot->ranges[3].range, 2.0);
+    float _rgt = clamp(0.0, robot->ranges[4].range, 2.0);
+
+    float spd = fwd;
+
+    float ang_err = ang_diff(robot->pos_t, tgt_heading);
+
+    if (abs(ang_err) > M_PI/6.0) {
+        if (ang_err > 0) {
+            robot->set_vel(2.0, -2.0);
+        } else {
+            robot->set_vel(-2.0, 2.0);
+        }
+        //robot->set_vel(2.0, -2.0);
+    }
+    else {
+        robot->set_vel(spd + ang_err, spd - ang_err);
+    }
+
+    if (stop) {
+        robot->set_vel(-1, -1);
+    }
+    */
 
     return;
 }
@@ -946,6 +991,7 @@ draw_thread(Robot* robot)
             draw_index(point.second, point.first);
         }
         std::this_thread::sleep_for (std::chrono::seconds(2));
+        clear_screen();
     }
 }
 
@@ -989,7 +1035,6 @@ plan_thread(Robot* robot)
         if (blocked || (adj_x == tgt_x && adj_y == tgt_y)
         || (abs(adj_x - tgt_x) > 2) || (abs(adj_y - tgt_y) > 2)
         || true) {
-            clear_screen();
             std::vector<Pair> path;
             while (path.size() == 0) {
                 path = aStarSearch(adj_x, adj_y);
@@ -1008,7 +1053,7 @@ plan_thread(Robot* robot)
             mtx.unlock();
 
 
-            while (distance(adj_x, adj_y, tgt_x, tgt_y) <= 0) {
+            while (distance(adj_x, adj_y, tgt_x, tgt_y) < 2) {
                 std::pair<int,int> p = curr_path.back();
                 curr_path.erase(curr_path.end());
                 mtx.lock();
